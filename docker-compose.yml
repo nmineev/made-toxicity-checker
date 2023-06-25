@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  web:
+    environment:
+      - TOKEN=${TOKEN}
+      - MODEL_NAME=${MODEL_NAME}
+      - MODEL_FILE_NAME=${MODEL_FILE_NAME}
+    build: backend/
+    volumes:
+      - type: bind
+        source: ${DATA_PATH}
+        target: /data
+    command: /entrypoint.sh
+
+volumes:
+  data:

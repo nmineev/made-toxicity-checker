@@ -1,0 +1,5 @@
+aiogram==2.22.2
+asyncio
+emoji
+transformers
+torch
