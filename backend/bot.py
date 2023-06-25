@@ -38,7 +38,11 @@ dp = Dispatcher(bot, storage=storage)
 @dp.message_handler(commands=["start", "help"])
 async def send_welcome(message: types.Message):
     await message.reply("""*Welcome to Toxicity Checker Bot!*\n
-Just send me your message and i check it for toxicity.""",
+I'll checking for toxicity every message sent to me,
+so you can add me to your group for toxicity control.\n
+Also you can use command `/toxicity <text>` for checking 
+following text, or just reply some message and write 
+`/toxicity` without arguments to check the replayed one.""",
                         parse_mode=types.ParseMode.MARKDOWN)
 
 
@@ -67,17 +71,8 @@ async def check_toxicity_command(message: types.Message):
 @dp.message_handler()
 async def check_toxicity(message: types.Message):
     #logging.info(message)
-    # if message.text == "/toxicity":
-    #     message = message.reply_to_message if hasattr(message, "reply_to_message") else None
-    #     if message is None:
-    #         await message.reply("Wrong `/toxicity` command usage!")
-    # #logging.info(message)
-
     text_author = message["from"].username
     text = message.text
-    # if text[:9] == "/toxicity":
-    #     text = text[9:].strip()
-
     text_is_toxic, toxicity_score = toxicity_checker.check_toxicity(text, MODEL, TOKENIZER)
     reply_message = (f"WowWowWow, more respect please, @{text_author}! Your message '{text}'"
                      f" toxic on {toxicity_score * 100:.0f}%")
@@ -87,9 +82,6 @@ async def check_toxicity(message: types.Message):
         reply_message = (f"Nice to hear that, @{text_author}! Your message '{text}'"
                          f" toxic on {toxicity_score * 100:.0f}%")
     await message.reply(reply_message)
-
-#@dp.message_handler(commands=["toxicity"])
-
 
 
 if __name__ == "__main__":
