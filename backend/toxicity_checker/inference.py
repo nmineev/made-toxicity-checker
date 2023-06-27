@@ -8,14 +8,39 @@ from torch.utils.data import Dataset, DataLoader
 MAX_LEN = 128
 CLASS_NAMES = ["normal", "toxic"]
 SM = torch.nn.Sigmoid()
-THRESHOLD = 0.7
+DEFAULT_THRESHOLD = 0.7
+
+
+class LoRALayer(nn.Module):
+    """Wraps a linear layer with LoRA-like adapter. Wraps an existing OPT linear layer"""
+    def __init__(self, module: nn.Linear, rank: int):
+        super().__init__()
+        self.module = module
+        self.adapter = nn.Sequential(
+            nn.Linear(module.in_features, rank, bias=False),
+            nn.Linear(rank, module.out_features, bias=False)
+        )
+        nn.init.kaiming_uniform_(self.adapter[0].weight, a=5 ** 0.5)
+        nn.init.zeros_(self.adapter[1].weight)
+
+        self.adapter.to(module.weight.device)
+
+    def forward(self, input):
+        # Apply self.module and LoRA adapter, return the sum (base module outputs + adapter outputs)
+        return self.module(input) + self.adapter(input)
 
 
 class SentimentClassifier(nn.Module):
 
-    def __init__(self, model_name_):
+    def __init__(self, model_name_, model_path_):
         super(SentimentClassifier, self).__init__()
         self.bert = BertModel.from_pretrained(model_name_)
+        if model_path_ == "./toxicity_checker/data/model_dp_512/model_dp_512.bin":
+            for name, module in self.bert.named_modules():
+                if 'BertSelfAttention' in repr(type(module)):
+                    module.query = LoRALayer(module.query, rank=512)
+                    module.key = LoRALayer(module.key, rank=512)
+                    module.value = LoRALayer(module.value, rank=512)
         self.out = nn.Sequential(
             nn.Linear(self.bert.config.hidden_size, 600),
             nn.ReLU(),
@@ -38,9 +63,10 @@ class SentimentClassifier(nn.Module):
         return self.out(output)
 
 
+@torch.no_grad()
 def load_model_tokenizer(model_name, model_path):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = SentimentClassifier(model_name_=model_name)
+    model = SentimentClassifier(model_name_=model_name, model_path_=model_path)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model = model.to(device)
     tokenizer = BertTokenizer.from_pretrained(model_name)
@@ -48,7 +74,7 @@ def load_model_tokenizer(model_name, model_path):
 
 
 @torch.no_grad()
-def check_toxicity(text, model=None, tokenizer=None):
+def check_toxicity(text, model=None, tokenizer=None, threshold=DEFAULT_THRESHOLD):
     if model is None:
         toxicity_score = random.random()
         return toxicity_score > 0.5, toxicity_score
@@ -70,5 +96,5 @@ def check_toxicity(text, model=None, tokenizer=None):
     model.eval()
     output = model(input_ids, attention_mask)
     output_probs = SM(output.flatten()).item()
-    prediction = (output_probs > THRESHOLD)
+    prediction = (output_probs > threshold)
     return prediction, output_probs

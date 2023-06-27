@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 import sys
 import pprint
 from aiogram import Bot, Dispatcher, types
@@ -24,10 +25,12 @@ MODEL_FILE_NAME = os.environ["MODEL_FILE_NAME"]
 TRIGGER_ON = "toxic"  # Available values: "all", "toxic"
 
 # Load model and tokenizer
+logging.info(f"Loading model and tokenizer. MODEL_NAME: {MODEL_NAME}, MODEL_FILE_NAME: {MODEL_FILE_NAME}.")
 MODEL, TOKENIZER = toxicity_checker.load_model_tokenizer(
     MODEL_NAME,
     f"./toxicity_checker/data/{MODEL_FILE_NAME}",
 )
+logging.info(f"Loading model and tokenizer to {next(iter(MODEL.parameters())).device} done.")
 
 # Initialize bot and dispatcher
 bot = Bot(token=API_TOKEN)
@@ -40,15 +43,66 @@ async def send_welcome(message: types.Message):
     await message.reply("""*Welcome to Toxicity Checker Bot!*\n
 I'll checking for toxicity every message sent to me,
 so you can add me to your group for toxicity control.\n
+All messages with toxicity percent more than acceptable 
+in a chat will be recognized as toxic and informing message will be send.
+By default, acceptable toxicity is 70%, but you can change 
+it by command `/set_acceptable_toxicity_percent <positive integer between 0 and 100>`.
+In groups this command available only for administrators. 
+To view current acceptable toxicity percent in a chat, use `/acceptable_toxicity_percent` command.\n
 Also you can use command `/toxicity <text>` for checking 
 following text, or just reply some message and write 
-`/toxicity` without arguments to check the replayed one.""",
+`/toxicity` without arguments to check the replayed one.\n""",
                         parse_mode=types.ParseMode.MARKDOWN)
 
 
-@dp.message_handler(Text(startswith=["/toxicity"]))
+@dp.message_handler(state="*", commands=["set_acceptable_toxicity_percent"])
+async def check_toxicity_command(message: types.Message):
+    new_acceptable_toxicity_percent = message.get_args()
+    if (new_acceptable_toxicity_percent
+            and 0 <= int(new_acceptable_toxicity_percent) <= 100):
+        new_acceptable_toxicity_percent = int(new_acceptable_toxicity_percent)
+    else:
+        new_acceptable_toxicity_percent = 70
+    state = dp.current_state(chat=message.chat.id)
+    current_acceptable_toxicity_percent = await state.get_state()
+    if current_acceptable_toxicity_percent is None:
+        current_acceptable_toxicity_percent = 70
+    sender_id = message["from"].id
+    sender_username = message["from"].username
+    if message.chat.type == "private":
+        reply_message = (f"Acceptable toxicity reset from {current_acceptable_toxicity_percent}%"
+                         f" to {new_acceptable_toxicity_percent}% by @{sender_username}")
+        await state.set_state(new_acceptable_toxicity_percent)
+    else:
+        administrators = await message.chat.get_administrators()
+        for administrator in administrators:
+            if administrator.user.id == sender_id:
+                reply_message = (f"Acceptable toxicity reset from {current_acceptable_toxicity_percent}%"
+                                 f"to {new_acceptable_toxicity_percent}% by @{sender_username}")
+                await state.set_state(new_acceptable_toxicity_percent)
+                break
+        else:
+            reply_message = f"Insufficient permissions"
+    await message.reply(reply_message)
+
+
+@dp.message_handler(state="*", commands=["acceptable_toxicity_percent"])
 async def check_toxicity_command(message: types.Message):
     #logging.info(message)
+    state = dp.current_state(chat=message.chat.id)
+    current_acceptable_toxicity_percent = await state.get_state()
+    if current_acceptable_toxicity_percent is None:
+        current_acceptable_toxicity_percent = 70
+    current_acceptable_toxicity_percent = int(current_acceptable_toxicity_percent)
+    #logging.info(current_acceptable_toxicity_percent)
+    reply_message = f"Acceptable toxicity is {current_acceptable_toxicity_percent}%"
+    await message.reply(reply_message)
+
+
+@dp.message_handler(Text(startswith=["/toxicity"]), state="*")
+async def check_toxicity_command(message: types.Message):
+    #logging.info(message)
+    #time_start = time.time()
     if message.text == "/toxicity":
         message = message.reply_to_message if hasattr(message, "reply_to_message") else None
         if message is None:
@@ -59,21 +113,38 @@ async def check_toxicity_command(message: types.Message):
     if text[:9] == "/toxicity":
         text = text[9:].strip()
 
-    text_is_toxic, toxicity_score = toxicity_checker.check_toxicity(text, MODEL, TOKENIZER)
+    state = dp.current_state(chat=message.chat.id)
+    current_acceptable_toxicity_percent = await state.get_state()
+    if current_acceptable_toxicity_percent is None:
+        current_acceptable_toxicity_percent = 70
+    current_acceptable_toxicity_percent = int(current_acceptable_toxicity_percent)
+    threshold = current_acceptable_toxicity_percent / 100
+
+    text_is_toxic, toxicity_score = toxicity_checker.check_toxicity(text, MODEL, TOKENIZER, threshold)
     reply_message = (f"WowWowWow, more respect please, @{text_author}! Your message '{text}'"
                      f" toxic on {toxicity_score * 100:.0f}%")
     if not text_is_toxic:
         reply_message = (f"Nice to hear that, @{text_author}! Your message '{text}'"
                          f" toxic on {toxicity_score * 100:.0f}%")
+    #logging.info(f"Message '{message}' processed in {time.time() - time_start:.3f}s")
     await message.reply(reply_message)
 
 
-@dp.message_handler()
+@dp.message_handler(state="*")
 async def check_toxicity(message: types.Message):
     #logging.info(message)
+    #time_start = time.time()
     text_author = message["from"].username
     text = message.text
-    text_is_toxic, toxicity_score = toxicity_checker.check_toxicity(text, MODEL, TOKENIZER)
+
+    state = dp.current_state(chat=message.chat.id)
+    current_acceptable_toxicity_percent = await state.get_state()
+    if current_acceptable_toxicity_percent is None:
+        current_acceptable_toxicity_percent = 70
+    current_acceptable_toxicity_percent = int(current_acceptable_toxicity_percent)
+    threshold = current_acceptable_toxicity_percent / 100
+
+    text_is_toxic, toxicity_score = toxicity_checker.check_toxicity(text, MODEL, TOKENIZER, threshold)
     reply_message = (f"WowWowWow, more respect please, @{text_author}! Your message '{text}'"
                      f" toxic on {toxicity_score * 100:.0f}%")
     if not text_is_toxic:
@@ -81,8 +152,14 @@ async def check_toxicity(message: types.Message):
             return
         reply_message = (f"Nice to hear that, @{text_author}! Your message '{text}'"
                          f" toxic on {toxicity_score * 100:.0f}%")
+    #logging.info(f"Message '{message}' processed in {time.time() - time_start:.3f}s")
     await message.reply(reply_message)
 
 
+async def shutdown(dispatcher: Dispatcher):
+    await dispatcher.storage.close()
+    await dispatcher.storage.wait_closed()
+
+
 if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=True)
+    executor.start_polling(dp, skip_updates=True, on_shutdown=shutdown)
