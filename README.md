@@ -2,18 +2,17 @@
 ### Telegram Bot for toxic messages detection.
 Can be added to a telegram group and will inform group members when some message 
 toxicity exceeds acceptable, by administrators, toxicity threshold, so moderation 
-of such group significantly simplifies. 
+of such group significantly simplifies.  
 
-bot will be checking toxicity percent 
-You can add this bot in your group where bot  
 ### Functionality:
 1. Automatically checks every message in a group (or a chat) for acceptable toxicity 
 percent exceeding and, when it happens, recognizes this message as toxic and sends 
 informing message.
 2. Administrators of a group can vary acceptable toxicity percent by command 
-`/set_acceptable_toxicity_percent <int between 0 and 100>`. By default acceptable 
+`/set_acceptable_toxicity_percent <int between 0 and 100>`.  
+By default acceptable 
 percent is 70.
-3. Other users can view acceptable toxicity percent in a group throw 
+3. Other users can view acceptable toxicity percent in a group through 
 `/acceptable_toxicity_percent` command.
 4. Show toxicity percent of arbitrary text with command `/toxicity <text>`
 5. Show toxicity percent of any replayed message with command `/toxicity`
@@ -23,3 +22,6 @@ percent is 70.
 and write your bot token into `.env` file:  
 `TOKEN=<your_tgbottoken>`
 2. Run in terminal: `sudo docker compose up --build`
+
+### Demonstration
+![demo](demka_final.gif)
