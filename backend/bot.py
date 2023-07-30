@@ -38,11 +38,11 @@ storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
 
-@dp.message_handler(commands=["start", "help"])
+@dp.message_handler(state="*", commands=["start", "help"])
 async def send_welcome(message: types.Message):
-    await message.reply("""*Welcome to Toxicity Checker Bot!*\n
-I'll checking for toxicity every message sent to me,
-so you can add me to your group for toxicity control.\n
+    await message.reply(emojize("""*Welcome to Toxicity Checker Bot!*:robot:\n
+:biohazard:I'll checking for toxicity every message sent to me,
+so you can add me to your group for toxicity control.:biohazard:\n
 All messages with toxicity percent more than acceptable 
 in a chat will be recognized as toxic and informing message will be send.
 By default, acceptable toxicity is 70%, but you can change 
@@ -51,7 +51,7 @@ In groups this command available only for administrators.
 To view current acceptable toxicity percent in a chat, use `/acceptable_toxicity_percent` command.\n
 Also you can use command `/toxicity <text>` for checking 
 following text, or just reply some message and write 
-`/toxicity` without arguments to check the replayed one.\n""",
+`/toxicity` without arguments to check the replayed one.\n"""),
                         parse_mode=types.ParseMode.MARKDOWN)
 
 
@@ -78,7 +78,7 @@ async def check_toxicity_command(message: types.Message):
         for administrator in administrators:
             if administrator.user.id == sender_id:
                 reply_message = (f"Acceptable toxicity reset from {current_acceptable_toxicity_percent}%"
-                                 f"to {new_acceptable_toxicity_percent}% by @{sender_username}")
+                                 f" to {new_acceptable_toxicity_percent}% by @{sender_username}")
                 await state.set_state(new_acceptable_toxicity_percent)
                 break
         else:
@@ -121,11 +121,12 @@ async def check_toxicity_command(message: types.Message):
     threshold = current_acceptable_toxicity_percent / 100
 
     text_is_toxic, toxicity_score = toxicity_checker.check_toxicity(text, MODEL, TOKENIZER, threshold)
-    reply_message = (f"WowWowWow, more respect please, @{text_author}! Your message '{text}'"
-                     f" toxic on {toxicity_score * 100:.0f}%")
-    if not text_is_toxic:
-        reply_message = (f"Nice to hear that, @{text_author}! Your message '{text}'"
-                         f" toxic on {toxicity_score * 100:.0f}%")
+    reply_message = f"Message '{text}'\nis toxic on {toxicity_score * 100:.0f}%"
+    # reply_message = (f"WowWowWow, more respect please, @{text_author}! Your message '{text}'"
+    #                  f" toxic on {toxicity_score * 100:.0f}%")
+    # if not text_is_toxic:
+    #     reply_message = (f"Nice to hear that, @{text_author}! Your message '{text}'"
+    #                      f" toxic on {toxicity_score * 100:.0f}%")
     #logging.info(f"Message '{message}' processed in {time.time() - time_start:.3f}s")
     await message.reply(reply_message)
 
@@ -145,15 +146,16 @@ async def check_toxicity(message: types.Message):
     threshold = current_acceptable_toxicity_percent / 100
 
     text_is_toxic, toxicity_score = toxicity_checker.check_toxicity(text, MODEL, TOKENIZER, threshold)
-    reply_message = (f"WowWowWow, more respect please, @{text_author}! Your message '{text}'"
-                     f" toxic on {toxicity_score * 100:.0f}%")
+    reply_message = f":biohazard:Toxic message from @{text_author}! Toxicity: {toxicity_score * 100:.0f}%"
+    # reply_message = (f"WowWowWow, more respect please, @{text_author}! Your message '{text}'"
+    #                  f" toxic on {toxicity_score * 100:.0f}%")
     if not text_is_toxic:
         if TRIGGER_ON == "toxic":
             return
         reply_message = (f"Nice to hear that, @{text_author}! Your message '{text}'"
                          f" toxic on {toxicity_score * 100:.0f}%")
     #logging.info(f"Message '{message}' processed in {time.time() - time_start:.3f}s")
-    await message.reply(reply_message)
+    await message.reply(emojize(reply_message))
 
 
 async def shutdown(dispatcher: Dispatcher):
